@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model inventory_transactions {
+  id           Int                         @id @default(autoincrement())
+  product_id   Int
+  warehouse_id Int
+  type         inventory_transactions_type
+  quantity     Int
+  reason       String?                     @db.VarChar(255)
+  created_at   DateTime                    @default(now()) @db.Timestamp(0)
+  warehouses   warehouses                  @relation(fields: [warehouse_id], references: [id], onUpdate: Restrict, map: "inventory_transactions_ibfk_1")
+
+  @@index([warehouse_id], map: "warehouse_id")
+}
+
+model stock_balances {
+  id           Int        @id @default(autoincrement())
+  product_id   Int
+  warehouse_id Int
+  quantity     Int        @default(0)
+  min_stock    Int?       @default(5)
+  updated_at   DateTime   @default(now()) @db.Timestamp(0)
+  warehouses   warehouses @relation(fields: [warehouse_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "stock_balances_ibfk_1")
+
+  @@unique([product_id, warehouse_id], map: "idx_product_warehouse")
+  @@index([warehouse_id], map: "warehouse_id")
+}
+
+model warehouses {
+  id                     Int                      @id @default(autoincrement())
+  name                   String                   @db.VarChar(100)
+  location               String                   @db.VarChar(255)
+  inventory_transactions inventory_transactions[]
+  stock_balances         stock_balances[]
+}
+
+enum inventory_transactions_type {
+  IN
+  OUT
+  ADJUSTMENT
+}
