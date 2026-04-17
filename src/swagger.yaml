@@ -1,0 +1,580 @@
+openapi: 3.0.0
+info:
+  title: Inventory Service API
+  description: |
+    Microsserviço de inventário do e-commerce. Gerencia armazéns (warehouses),
+    saldos de estoque (stock balances) e transações (inventory transactions).
+
+    Todos os endpoints (exceto `/health`) exigem autenticação via JWT emitido
+    pelo `progweb_ms1_user`. Operações de escrita em armazéns, ajustes e
+    atualização de estoque mínimo exigem `role = ADMIN`.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3003/api/inventory
+    description: Servidor local
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Warehouse:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Armazém Central SP
+        location:
+          type: string
+          example: São Paulo - SP
+
+    WarehouseInput:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Armazém Central SP
+        location:
+          type: string
+          example: São Paulo - SP
+
+    StockBalance:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 10
+        productId:
+          type: integer
+          example: 5
+        warehouseId:
+          type: integer
+          example: 1
+        quantity:
+          type: integer
+          example: 120
+        minStock:
+          type: integer
+          example: 20
+        updatedAt:
+          type: string
+          format: date-time
+        warehouse:
+          $ref: "#/components/schemas/Warehouse"
+
+    UpdateMinStockInput:
+      type: object
+      required:
+        - minStock
+      properties:
+        minStock:
+          type: integer
+          minimum: 0
+          example: 25
+
+    InventoryTransaction:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 99
+        productId:
+          type: integer
+          example: 5
+        warehouseId:
+          type: integer
+          example: 1
+        type:
+          type: string
+          enum: [IN, OUT, ADJUSTMENT]
+          example: IN
+        quantity:
+          type: integer
+          example: 50
+        reason:
+          type: string
+          nullable: true
+          example: Recebimento NF 12345
+        createdAt:
+          type: string
+          format: date-time
+        warehouse:
+          $ref: "#/components/schemas/Warehouse"
+
+    StockMovementInput:
+      type: object
+      required:
+        - productId
+        - warehouseId
+        - quantity
+      properties:
+        productId:
+          type: integer
+          example: 5
+        warehouseId:
+          type: integer
+          example: 1
+        quantity:
+          type: integer
+          minimum: 1
+          example: 50
+        reason:
+          type: string
+          example: Recebimento NF 12345
+
+    AdjustmentInput:
+      type: object
+      required:
+        - productId
+        - warehouseId
+        - delta
+      properties:
+        productId:
+          type: integer
+          example: 5
+        warehouseId:
+          type: integer
+          example: 1
+        delta:
+          type: integer
+          description: Diferença a aplicar no saldo (positiva ou negativa, nunca zero).
+          example: -3
+        reason:
+          type: string
+          example: Ajuste por inventário cíclico
+
+    MovementResponse:
+      type: object
+      properties:
+        transaction:
+          $ref: "#/components/schemas/InventoryTransaction"
+        balance:
+          $ref: "#/components/schemas/StockBalance"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Mensagem de erro
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ==========================================
+  # WAREHOUSES
+  # ==========================================
+  /warehouses:
+    get:
+      tags: [Warehouses]
+      summary: Lista todos os armazéns
+      responses:
+        "200":
+          description: Lista de armazéns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Warehouse"
+        "401":
+          description: Token não fornecido ou inválido
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    post:
+      tags: [Warehouses]
+      summary: Cria um novo armazém (Requer ADMIN)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WarehouseInput"
+      responses:
+        "201":
+          description: Armazém criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Warehouse"
+        "400":
+          description: Dados inválidos (nome obrigatório)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Token não fornecido ou inválido
+        "403":
+          description: Permissão insuficiente
+        "409":
+          description: Já existe um armazém com este nome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /warehouses/{id}:
+    get:
+      tags: [Warehouses]
+      summary: Busca um armazém pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          example: 1
+      responses:
+        "200":
+          description: Armazém encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Warehouse"
+        "401":
+          description: Token não fornecido ou inválido
+        "404":
+          description: Armazém não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    put:
+      tags: [Warehouses]
+      summary: Atualiza um armazém (Requer ADMIN)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WarehouseInput"
+      responses:
+        "200":
+          description: Armazém atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Warehouse"
+        "401":
+          description: Token não fornecido ou inválido
+        "403":
+          description: Permissão insuficiente
+        "404":
+          description: Armazém não encontrado
+        "409":
+          description: Já existe um armazém com este nome
+
+    delete:
+      tags: [Warehouses]
+      summary: Remove um armazém (Requer ADMIN)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Armazém removido
+        "401":
+          description: Token não fornecido ou inválido
+        "403":
+          description: Permissão insuficiente
+        "404":
+          description: Armazém não encontrado
+        "409":
+          description: Armazém possui saldos vinculados
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  # ==========================================
+  # STOCK BALANCES
+  # ==========================================
+  /stock-balances:
+    get:
+      tags: [Stock Balances]
+      summary: Lista saldos de estoque
+      parameters:
+        - in: query
+          name: productId
+          schema:
+            type: integer
+          description: Filtra por produto
+        - in: query
+          name: warehouseId
+          schema:
+            type: integer
+          description: Filtra por armazém
+      responses:
+        "200":
+          description: Lista de saldos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockBalance"
+        "401":
+          description: Token não fornecido ou inválido
+
+  /stock-balances/low-stock:
+    get:
+      tags: [Stock Balances]
+      summary: Lista saldos abaixo do mínimo configurado
+      description: Retorna apenas saldos onde `quantity < minStock`.
+      responses:
+        "200":
+          description: Lista de saldos em alerta
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StockBalance"
+        "401":
+          description: Token não fornecido ou inválido
+
+  /stock-balances/{productId}/{warehouseId}:
+    get:
+      tags: [Stock Balances]
+      summary: Busca o saldo de um produto em um armazém específico
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: warehouseId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Saldo encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockBalance"
+        "401":
+          description: Token não fornecido ou inválido
+        "404":
+          description: Saldo não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /stock-balances/{productId}/{warehouseId}/min-stock:
+    patch:
+      tags: [Stock Balances]
+      summary: Atualiza o estoque mínimo de um saldo (Requer ADMIN)
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: warehouseId
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMinStockInput"
+      responses:
+        "200":
+          description: Saldo atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StockBalance"
+        "400":
+          description: Valor inválido para minStock
+        "401":
+          description: Token não fornecido ou inválido
+        "403":
+          description: Permissão insuficiente
+        "404":
+          description: Saldo não encontrado
+
+  # ==========================================
+  # INVENTORY TRANSACTIONS
+  # ==========================================
+  /transactions:
+    get:
+      tags: [Transactions]
+      summary: Lista o histórico de transações de estoque
+      parameters:
+        - in: query
+          name: productId
+          schema:
+            type: integer
+        - in: query
+          name: warehouseId
+          schema:
+            type: integer
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [IN, OUT, ADJUSTMENT]
+        - in: query
+          name: dateFrom
+          schema:
+            type: string
+            format: date-time
+          description: Data inicial (ISO 8601)
+        - in: query
+          name: dateTo
+          schema:
+            type: string
+            format: date-time
+          description: Data final (ISO 8601)
+      responses:
+        "200":
+          description: Lista de transações
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/InventoryTransaction"
+        "400":
+          description: Tipo de transação inválido
+        "401":
+          description: Token não fornecido ou inválido
+
+  /transactions/{id}:
+    get:
+      tags: [Transactions]
+      summary: Busca uma transação pelo ID
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Transação encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryTransaction"
+        "401":
+          description: Token não fornecido ou inválido
+        "404":
+          description: Transação não encontrada
+
+  /transactions/in:
+    post:
+      tags: [Transactions]
+      summary: Registra entrada de estoque
+      description: Cria uma transação `IN` e incrementa o saldo (cria saldo se não existir).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StockMovementInput"
+      responses:
+        "201":
+          description: Entrada registrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementResponse"
+        "400":
+          description: Quantidade inválida
+        "401":
+          description: Token não fornecido ou inválido
+        "404":
+          description: Armazém não encontrado
+
+  /transactions/out:
+    post:
+      tags: [Transactions]
+      summary: Registra saída de estoque
+      description: Cria uma transação `OUT` e decrementa o saldo. Falha se o saldo for insuficiente.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StockMovementInput"
+      responses:
+        "201":
+          description: Saída registrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementResponse"
+        "400":
+          description: Quantidade inválida ou estoque insuficiente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Token não fornecido ou inválido
+        "404":
+          description: Armazém não encontrado
+
+  /transactions/adjustment:
+    post:
+      tags: [Transactions]
+      summary: Aplica ajuste manual de estoque (Requer ADMIN)
+      description: Aplica um delta (positivo ou negativo) ao saldo e registra uma transação `ADJUSTMENT`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustmentInput"
+      responses:
+        "201":
+          description: Ajuste aplicado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MovementResponse"
+        "400":
+          description: Delta inválido ou estoque insuficiente para o ajuste
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Token não fornecido ou inválido
+        "403":
+          description: Permissão insuficiente
+        "404":
+          description: Armazém não encontrado
