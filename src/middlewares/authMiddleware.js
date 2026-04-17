@@ -1,21 +1,19 @@
-const jwt = require('jsonwebtoken');
+const { verifyToken, extractTokenFromHeader } = require('../utils/jwtHelper');
+const { HTTP_STATUS, MESSAGES } = require('../utils/constants');
 
 const authMiddleware = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader) {
-    return res.status(401).json({ message: 'Token não fornecido' });
+  const token = extractTokenFromHeader(req.headers.authorization);
+  if (!token) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({ error: MESSAGES.TOKEN_MISSING });
   }
 
-  const [, token] = authHeader.split(' ');
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.id;
-    return next();
-  } catch (err) {
-    return res.status(401).json({ message: 'Token inválido' });
+  const decoded = verifyToken(token);
+  if (!decoded) {
+    return res.status(HTTP_STATUS.UNAUTHORIZED).json({ error: MESSAGES.TOKEN_INVALID });
   }
+
+  req.user = decoded;
+  next();
 };
 
 module.exports = authMiddleware;
