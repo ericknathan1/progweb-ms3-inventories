@@ -29,7 +29,7 @@ model stock_balances {
   updated_at   DateTime   @default(now()) @db.Timestamp(0)
   warehouses   warehouses @relation(fields: [warehouse_id], references: [id], onDelete: Cascade, onUpdate: Restrict, map: "stock_balances_ibfk_1")
 
-  @@unique([product_id, warehouse_id], map: "idx_product_warehouse")
+  @@unique([product_id, warehouse_id], name: "idx_product_warehouse", map: "idx_product_warehouse")
   @@index([warehouse_id], map: "warehouse_id")
 }
 
