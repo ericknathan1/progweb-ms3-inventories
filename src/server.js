@@ -14,7 +14,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use(cors());
 app.use(express.json());
 
-app.use('/api/inventory', routes);
+app.use('/api/v1', routes);
 
 app.get('/health', (req, res) => res.status(200).json({ status: 'UP', service: 'ecommerce-inventory' }));
 

@@ -2,14 +2,17 @@ const transactionRepo = require('../repositories/inventoryTransactionRepository'
 const { MESSAGES, TRANSACTION_TYPE } = require('../utils/constants');
 const {
   ensureWarehouseExists,
+  ensureProductExists,
   ensureSufficientStock,
   ensurePositiveQuantity,
   ensureNonZeroDelta
 } = require('../utils/validators');
 
-const stockIn = async ({ productId, warehouseId, quantity, reason }) => {
+const stockIn = async ({ productId, warehouseId, quantity, reason, token }) => {
   ensurePositiveQuantity(quantity);
   await ensureWarehouseExists(Number(warehouseId));
+  await ensureProductExists(Number(productId), token);
+  
   return await transactionRepo.applyMovement({
     productId: Number(productId),
     warehouseId: Number(warehouseId),
@@ -19,10 +22,12 @@ const stockIn = async ({ productId, warehouseId, quantity, reason }) => {
   });
 };
 
-const stockOut = async ({ productId, warehouseId, quantity, reason }) => {
+const stockOut = async ({ productId, warehouseId, quantity, reason, token }) => {
   ensurePositiveQuantity(quantity);
   await ensureWarehouseExists(Number(warehouseId));
+  await ensureProductExists(Number(productId), token);
   await ensureSufficientStock(Number(productId), Number(warehouseId), quantity);
+  
   return await transactionRepo.applyMovement({
     productId: Number(productId),
     warehouseId: Number(warehouseId),
@@ -32,9 +37,11 @@ const stockOut = async ({ productId, warehouseId, quantity, reason }) => {
   });
 };
 
-const adjustment = async ({ productId, warehouseId, delta, reason }) => {
+const adjustment = async ({ productId, warehouseId, delta, reason, token }) => {
   ensureNonZeroDelta(delta);
   await ensureWarehouseExists(Number(warehouseId));
+  await ensureProductExists(Number(productId), token);
+  
   try {
     return await transactionRepo.applyAdjustment({
       productId: Number(productId),

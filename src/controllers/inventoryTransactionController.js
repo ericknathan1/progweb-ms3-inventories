@@ -7,7 +7,7 @@ const {
 } = require('../utils/formatterResponse');
 
 const handleBusinessError = (error, res) => {
-  if (error.message === MESSAGES.WAREHOUSE_NOT_FOUND || error.message === MESSAGES.TRANSACTION_NOT_FOUND) {
+  if (error.message.includes('não encontrado') || error.message === MESSAGES.WAREHOUSE_NOT_FOUND || error.message === MESSAGES.TRANSACTION_NOT_FOUND) {
     return res.status(HTTP_STATUS.NOT_FOUND).json({ error: error.message });
   }
   if (
@@ -24,7 +24,8 @@ const handleBusinessError = (error, res) => {
 const stockIn = async (req, res, next) => {
   try {
     const { productId, warehouseId, quantity, reason } = req.body;
-    const result = await transactionService.stockIn({ productId, warehouseId, quantity, reason });
+    const token = req.headers.authorization;
+    const result = await transactionService.stockIn({ productId, warehouseId, quantity, reason, token });
     return res.status(HTTP_STATUS.CREATED).json({
       transaction: formatTransaction(result.transaction),
       balance: formatStockBalance(result.balance)
@@ -39,7 +40,8 @@ const stockIn = async (req, res, next) => {
 const stockOut = async (req, res, next) => {
   try {
     const { productId, warehouseId, quantity, reason } = req.body;
-    const result = await transactionService.stockOut({ productId, warehouseId, quantity, reason });
+    const token = req.headers.authorization;
+    const result = await transactionService.stockOut({ productId, warehouseId, quantity, reason, token });
     return res.status(HTTP_STATUS.CREATED).json({
       transaction: formatTransaction(result.transaction),
       balance: formatStockBalance(result.balance)
@@ -54,7 +56,8 @@ const stockOut = async (req, res, next) => {
 const adjustment = async (req, res, next) => {
   try {
     const { productId, warehouseId, delta, reason } = req.body;
-    const result = await transactionService.adjustment({ productId, warehouseId, delta, reason });
+    const token = req.headers.authorization;
+    const result = await transactionService.adjustment({ productId, warehouseId, delta, reason, token });
     return res.status(HTTP_STATUS.CREATED).json({
       transaction: formatTransaction(result.transaction),
       balance: formatStockBalance(result.balance)
